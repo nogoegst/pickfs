@@ -12,6 +12,7 @@ package pickfs // import "github.com/nogoegst/pickfs"
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/tools/godoc/vfs"
@@ -30,31 +31,38 @@ func New(fs vfs.FileSystem, m map[string]string) vfs.FileSystem {
 
 type pickfs struct {
 	fs vfs.FileSystem
-	m map[string]string
+	m  map[string]string
 }
 
 func (fs pickfs) String() string { return "pickfs" }
 
 func (fs pickfs) Close() error { return nil }
 
-func filename(p string) string {
-	return strings.TrimPrefix(p, "/")
+func (fs pickfs) lookup(p string) (string, bool) {
+	p = strings.TrimPrefix(p, "/")
+	dir, _ := filepath.Split(p)
+	for alias, realf := range fs.m {
+		if p == alias {
+			return realf, true
+		}
+		if strings.HasPrefix(dir, alias) {
+			subpath := strings.TrimPrefix(p, alias)
+			return filepath.Join(realf, subpath), true
+		}
+	}
+	return "", false
 }
 
 func (fs pickfs) Open(p string) (vfs.ReadSeekCloser, error) {
-	realf, ok := fs.m[filename(p)]
+	realf, ok := fs.lookup(p)
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	rsc, err := fs.fs.Open(realf)
-	if err != nil {
-		return nil, err
-	}
-	return rsc, nil
+	return fs.fs.Open(realf)
 }
 
 func (fs pickfs) Lstat(p string) (os.FileInfo, error) {
-	realf, ok := fs.m[filename(p)]
+	realf, ok := fs.lookup(p)
 	if !ok {
 		return nil, os.ErrNotExist
 	}
@@ -62,17 +70,16 @@ func (fs pickfs) Lstat(p string) (os.FileInfo, error) {
 }
 
 func (fs pickfs) Stat(p string) (os.FileInfo, error) {
-	realf, ok := fs.m[filename(p)]
+	realf, ok := fs.lookup(p)
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	fi, err := fs.fs.Stat(realf)
-	return fi, err
+	return fs.fs.Stat(realf)
 }
 
 // TODO: Modify mapfs version here to list maps internals
 func (fs pickfs) ReadDir(p string) ([]os.FileInfo, error) {
-	realf, ok := fs.m[filename(p)]
+	realf, ok := fs.lookup(p)
 	if !ok {
 		return nil, os.ErrNotExist
 	}
