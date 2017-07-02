@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"golang.org/x/tools/godoc/vfs"
+	"golang.org/x/tools/godoc/vfs/mapfs"
 )
 
 // New returns a new FileSystem with set of files picked
@@ -64,7 +65,7 @@ func (fs pickfs) Open(p string) (vfs.ReadSeekCloser, error) {
 func (fs pickfs) Lstat(p string) (os.FileInfo, error) {
 	realf, ok := fs.lookup(p)
 	if !ok {
-		return nil, os.ErrNotExist
+		return mapfs.New(fs.m).Lstat(p)
 	}
 	return fs.fs.Lstat(realf)
 }
@@ -72,16 +73,15 @@ func (fs pickfs) Lstat(p string) (os.FileInfo, error) {
 func (fs pickfs) Stat(p string) (os.FileInfo, error) {
 	realf, ok := fs.lookup(p)
 	if !ok {
-		return nil, os.ErrNotExist
+		return mapfs.New(fs.m).Stat(p)
 	}
 	return fs.fs.Stat(realf)
 }
 
-// TODO: Modify mapfs version here to list maps internals
 func (fs pickfs) ReadDir(p string) ([]os.FileInfo, error) {
 	realf, ok := fs.lookup(p)
 	if !ok {
-		return nil, os.ErrNotExist
+		return mapfs.New(fs.m).ReadDir(p)
 	}
 	return fs.fs.ReadDir(realf)
 }
