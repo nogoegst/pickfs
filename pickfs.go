@@ -42,16 +42,26 @@ func (fs pickfs) Close() error { return nil }
 func (fs pickfs) lookup(p string) (string, bool) {
 	p = strings.TrimPrefix(p, "/")
 	dir, _ := filepath.Split(p)
+	var subrealf string
 	for alias, realf := range fs.m {
 		if p == alias {
 			return realf, true
 		}
 		if strings.HasPrefix(dir, alias) {
 			subpath := strings.TrimPrefix(p, alias)
-			return filepath.Join(realf, subpath), true
+			subrealf = filepath.Join(realf, subpath)
 		}
 	}
+	if subrealf != "" {
+		return subrealf, true
+	}
 	return "", false
+}
+
+func (fs pickfs) lookupStrict(p string) (string, bool) {
+	p = strings.TrimPrefix(p, "/")
+	realf, ok := fs.m[p]
+	return realf, ok
 }
 
 func (fs pickfs) Open(p string) (vfs.ReadSeekCloser, error) {
@@ -80,8 +90,19 @@ func (fs pickfs) Stat(p string) (os.FileInfo, error) {
 
 func (fs pickfs) ReadDir(p string) ([]os.FileInfo, error) {
 	realf, ok := fs.lookup(p)
-	if !ok {
-		return mapfs.New(fs.m).ReadDir(p)
+	fis, err := mapfs.New(fs.m).ReadDir(p)
+	if ok {
+		fisreal, _ := fs.fs.ReadDir(realf)
+		for _, fi := range fisreal {
+			alias := filepath.Join(p, fi.Name())
+			_, exists := fs.lookupStrict(alias)
+			if !exists {
+				fis = append(fis, fi)
+			}
+		}
 	}
-	return fs.fs.ReadDir(realf)
+	if !ok && err != nil {
+		return nil, err
+	}
+	return fis, nil
 }
